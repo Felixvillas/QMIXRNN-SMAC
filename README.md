@@ -1,2 +1,2 @@
 # QMIXRNN
-An implementation of QMIX with rnn referring to pymarl
+Referring to pymarl, qmix is implemented with RNN to cope with SMAC environment
