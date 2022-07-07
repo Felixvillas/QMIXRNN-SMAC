@@ -241,7 +241,7 @@ def dqn_learning(
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=mean(eval_step), global_step=t+1)
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=mean(eval_win), global_step=t+1)
 
-    ### Log progress and keep track of statistics
+    ### log train results
     df = pd.DataFrame({})
     df.insert(loc=0, column='rewards', value=log_rewards)
     df.insert(loc=1, column='steps', value=log_steps)
