@@ -29,7 +29,7 @@ def store_hyper_para(args, store_path):
     print('==================hyper parameters store done!==================')
     
 
-def dqn_learning(
+def qmix_learning(
     env_class,
     env_id,
     seed,

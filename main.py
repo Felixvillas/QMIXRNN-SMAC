@@ -3,7 +3,7 @@ import torch.optim as optim
 from smac.env import StarCraft2Env
 
 from model import QMIX_agent
-from learn import dqn_learning
+from learn import qmix_learning
 from utils.schedule import LinearSchedule
 from utils.sc_wrapper import single_net_sc2env
 
@@ -50,7 +50,7 @@ def main(args=get_args()):
     else:
         env_class = StarCraft2Env
 
-    dqn_learning(
+    qmix_learning(
         env_class=env_class,
         env_id=args.map_name,
         seed=args.seed,
