@@ -164,6 +164,7 @@ class QMIX_agent(nn.Module):
         # Construct Q_net and target_Q_net
         self.Q = QMIX(obs_size, state_size, num_agents, num_actions).to(device)
         self.target_Q = QMIX(obs_size, state_size, num_agents, num_actions).to(device)
+        self.target_Q.load_state_dict(self.Q.state_dict())
         
         self.params = list(self.Q.parameters())
         self.grad_norm_clip = 10
