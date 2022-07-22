@@ -53,6 +53,13 @@ class QMIX(nn.Module):
             nn.Linear(self.mix_embed_dim, 1)
         )
 
+        # orthogonal initialization
+        for m in list(self.parameters()):
+            if isinstance(m, nn.Linear):
+                # orthogonal initialization
+                torch.nn.init.orthogonal_(m.weight, gain=np.sqrt(2))
+                torch.nn.init.zeros_(m.bias)
+
     
     def get_value(self, obs):
         '''get q_value accroding to current obs, avail_actions'''
