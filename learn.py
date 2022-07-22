@@ -57,9 +57,11 @@ def qmix_learning(
     '''
     Parameters:
     '''
-    env = env_class(env_id)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    env = env_class(map_name=env_id, seed=seed)
     if is_evaluate:
-        env_eval = env_class(env_id)
+        env_eval = env_class(map_name=env_id, seed=seed)
         
     env_info = env.get_env_info()
     obs_size = env_info['obs_shape']
