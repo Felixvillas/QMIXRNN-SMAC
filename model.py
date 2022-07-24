@@ -53,6 +53,7 @@ class QMIX(nn.Module):
             nn.Linear(self.mix_embed_dim, 1)
         )
 
+    def orth_init(self):
         # orthogonal initialization
         for m in list(self.parameters()):
             if isinstance(m, nn.Linear):
@@ -171,12 +172,13 @@ class QMIX_agent(nn.Module):
         # Construct Q_net and target_Q_net
         self.Q = QMIX(obs_size, state_size, num_agents, num_actions).to(device)
         self.target_Q = QMIX(obs_size, state_size, num_agents, num_actions).to(device)
+        self.Q.orth_init() # orthogonal initialization
         self.target_Q.load_state_dict(self.Q.state_dict())
         
         self.params = list(self.Q.parameters())
-        self.grad_norm_clip = 10
+        self.grad_norm_clip = 0.5
         # RMSProp alpha:0.99, RMSProp epsilon:0.00001
-        self.optimizer = optimizer(self.params, learning_rate)
+        self.optimizer = optimizer(self.params, learning_rate, alpha=0.99, eps=1e-5)
         self.MseLoss = nn.MSELoss(reduction='sum')
 
         # Consturct buffer
