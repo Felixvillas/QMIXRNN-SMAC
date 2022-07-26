@@ -59,6 +59,7 @@ def qmix_learning(
     '''
     np.random.seed(seed)
     torch.manual_seed(seed)
+    random.seed(seed)
     env = env_class(map_name=env_id, seed=seed)
     if is_evaluate:
         env_eval = env_class(map_name=env_id, seed=seed)
