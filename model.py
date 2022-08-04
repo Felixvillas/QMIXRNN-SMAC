@@ -317,6 +317,6 @@ class QMIX_agent(nn.Module):
         start = episode_num // 4
         end = episode_num * 3 // 4
         eval_reward = sorted(eval_reward)[start:end]
-        eval_step = sorted(eval_reward)[start:end]
+        eval_step = sorted(eval_step)[start:end]
         eval_win = sorted(eval_win)[start:end]
         return eval_reward, eval_step, eval_win
