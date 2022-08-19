@@ -52,6 +52,7 @@ def qmix_learning(
     learning_starts=50000,
     evaluate_num=4,
     target_update_freq=10000,
+    grad_norm_clip=10,
     args=None
 ):
     '''
@@ -112,7 +113,8 @@ def qmix_learning(
             episode_limits=episode_limit,
             batch_size=batch_size, 
             optimizer=optimizer, 
-            learning_rate=learning_rate
+            learning_rate=learning_rate,
+            grad_norm_clip=grad_norm_clip
     )
 
     #############
@@ -239,10 +241,10 @@ def qmix_learning(
             if num_param_update % target_update_freq == 0:
                 QMIX_agent.update_targets()
                 # evaluate the Q-net in greedy mode
-                eval_reward, eval_step, eval_win = QMIX_agent.evaluate(env_eval, evaluate_num)                               
-                writer.add_scalar(tag=f'starcraft{env_name}_eval/reward', scalar_value=mean(eval_reward), global_step=t+1)
-                writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=mean(eval_step), global_step=t+1)
-                writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=mean(eval_win), global_step=t+1)
+                eval_data = QMIX_agent.evaluate(env_eval, evaluate_num)                               
+                writer.add_scalar(tag=f'starcraft{env_name}_eval/reward', scalar_value=eval_data[0], global_step=t+1)
+                writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=eval_data[1], global_step=t+1)
+                writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=eval_data[2], global_step=t+1)
 
     ### log train results
     df = pd.DataFrame({})

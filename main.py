@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument('--learning-starts', type=int, default=20000)
     parser.add_argument('--target-update-freq', type=int, default=200)
     parser.add_argument('--learning-rate', type=float, default=3e-4)
+    parser.add_argument('--grad-norm-clip', type=float, default=0.5)
     # seed
     parser.add_argument('--seed', type=int, default=0)
     # ddqn
@@ -73,6 +74,7 @@ def main(args=get_args()):
         gamma=args.gamma,
         learning_starts=args.learning_starts,
         target_update_freq=args.target_update_freq,
+        grad_norm_clip=args.grad_norm_clip,
         args=args
     )
 

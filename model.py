@@ -55,7 +55,7 @@ class QMIX(nn.Module):
 
     def orth_init(self):
         # orthogonal initialization
-        for m in list(self.parameters()):
+        for m in list(self.modules()):
             if isinstance(m, nn.Linear):
                 # orthogonal initialization
                 torch.nn.init.orthogonal_(m.weight, gain=np.sqrt(2))
@@ -149,7 +149,8 @@ class QMIX_agent(nn.Module):
             episode_limits=60,
             batch_size=32, 
             optimizer=torch.optim.RMSprop, 
-            learning_rate=3e-4
+            learning_rate=3e-4,
+            grad_norm_clip=10,
         ) -> None:
         super(QMIX_agent, self).__init__()
         assert multi_steps == 1 and is_per == False and is_share_para == True, \
@@ -176,7 +177,7 @@ class QMIX_agent(nn.Module):
         self.target_Q.load_state_dict(self.Q.state_dict())
         
         self.params = list(self.Q.parameters())
-        self.grad_norm_clip = 0.5
+        self.grad_norm_clip = grad_norm_clip
         # RMSProp alpha:0.99, RMSProp epsilon:0.00001
         self.optimizer = optimizer(self.params, learning_rate, alpha=0.99, eps=1e-5)
         self.MseLoss = nn.MSELoss(reduction='sum')
@@ -292,9 +293,7 @@ class QMIX_agent(nn.Module):
 
     def evaluate(self, env, episode_num=32):
         '''evaluate Q model'''
-        eval_reward = []
-        eval_step = []
-        eval_win = []
+        eval_data = []
         for _ in range(episode_num):
             eval_ep_rewards = []
             done = False
@@ -310,13 +309,11 @@ class QMIX_agent(nn.Module):
                 eval_ep_rewards.append(reward)
 
                 if done:
-                    eval_reward.append(sum(eval_ep_rewards))
-                    eval_step.append(len(eval_ep_rewards))
-                    eval_win.append(1. if 'battle_won' in info and info['battle_won'] else 0.)
+                    eval_data.append(
+                        [sum(eval_ep_rewards), len(eval_ep_rewards), 1. if 'battle_won' in info and info['battle_won'] else 0.]
+                    )
 
         start = episode_num // 4
         end = episode_num * 3 // 4
-        eval_reward = sorted(eval_reward)[start:end]
-        eval_step = sorted(eval_step)[start:end]
-        eval_win = sorted(eval_win)[start:end]
-        return eval_reward, eval_step, eval_win
+        sort_eval_data = sorted(eval_data, key=lambda x: x[-1])[start: end] # sorted by win or nor
+        return np.mean(sort_eval_data, axis=0)
