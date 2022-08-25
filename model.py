@@ -297,10 +297,11 @@ class QMIX_agent(nn.Module):
         for _ in range(episode_num):
             eval_ep_rewards = []
             done = False
+            action = None
             env.reset()
             self.Q.init_eval_rnn_hidden()
             while not done:
-                last_obs = env.get_obs()
+                last_obs = env.get_obs(action)
                 avail_actions = env.get_avail_actions()
                 recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in last_obs], axis=0)
                 random_selection = np.zeros(self.num_agents).astype(np.bool_)
