@@ -7,6 +7,7 @@ from statistics import mean
 from tqdm import *
 from torch.distributions import Categorical
 import torch
+import datetime
 
 from tensorboardX import SummaryWriter
 
@@ -46,18 +47,20 @@ def qmix_learning(
     learning_rate,
     exploration,
     max_training_steps=1000000,
-    replay_buffer_size=1000000,
+    replay_buffer_size=5000,
     batch_size=32,
     gamma=.99,
-    learning_starts=50000,
-    evaluate_num=4,
-    target_update_freq=10000,
+    learning_starts=20000,
+    evaluate_num=32,
+    target_update_freq=200,
+    save_model_freq=2000,
     grad_norm_clip=10,
     args=None
 ):
     '''
     Parameters:
     '''
+    assert save_model_freq % target_update_freq == 0
     np.random.seed(seed)
     torch.manual_seed(seed)
     random.seed(seed)
@@ -87,8 +90,7 @@ def qmix_learning(
     log_dir = log_dir + '/'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    num_results = len(next(os.walk(log_dir))[1])
-    log_dir = log_dir + f'{num_results}/'
+    log_dir = log_dir + f'seed_{seed}_{datetime.datetime.now().strftime("%m%d_%H-%M-%S")}/'
     writer = SummaryWriter(log_dir=log_dir)
     
     # store hyper parameters
@@ -245,6 +247,8 @@ def qmix_learning(
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/reward', scalar_value=eval_data[0], global_step=t+1)
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=eval_data[1], global_step=t+1)
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=eval_data[2], global_step=t+1)
+            if num_param_update % save_model_freq == 0:
+                QMIX_agent.save(checkpoint_path=os.path.join(log_dir, 'agent.pth'))
 
     ### log train results
     df = pd.DataFrame({})
@@ -258,7 +262,7 @@ def qmix_learning(
         value=df['steps'].rolling(window=20, win_type='triang', min_periods=1).mean())
     df_avg.insert(loc=2, column='wintag',
         value=df['wintag'].rolling(window=20, win_type='triang', min_periods=1).mean())
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+    _, (ax1, ax2, ax3) = plt.subplots(3, 1)
     ax1.plot(df_avg['rewards'], label='rewards')
     ax1.set_ylabel('rewards')
     ax2.plot(df_avg['steps'], label='steps')

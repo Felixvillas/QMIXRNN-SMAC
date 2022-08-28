@@ -291,6 +291,15 @@ class QMIX_agent(nn.Module):
         '''load para from Q to target_Q'''
         self.target_Q.load_state_dict(self.Q.state_dict())
 
+    def save(self, checkpoint_path):
+        '''save model'''
+        torch.save(self.Q.state_dict(), checkpoint_path)
+    
+    def load(self, checkpoint_path):
+        '''load model'''
+        self.Q.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))
+        self.target_Q.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))
+
     def evaluate(self, env, episode_num=32):
         '''evaluate Q model'''
         eval_data = []
