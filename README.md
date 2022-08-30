@@ -3,7 +3,7 @@ Referring to pymarl, qmix is implemented clearly with RNN to cope with SMAC envi
 This clear implementation can help you figure out how does QMIX work  
 
 ## Run
-Note: --optimizer=0/1 means that optimizer `Adam` and `RMSprop` is good on this scenario, please just select one of both when running
+Note: --optimizer=0/1 means that optimizer both `Adam` and `RMSprop` are good on this scenario, please just select one of both when running
 ```shell
 python main.py --map-name=3s5z --optimizer=0/1
 ```
