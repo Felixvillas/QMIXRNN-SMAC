@@ -148,9 +148,9 @@ class QMIX_agent(nn.Module):
             replay_buffer_size=5000, 
             episode_limits=60,
             batch_size=32, 
-            optimizer=torch.optim.RMSprop, 
             learning_rate=3e-4,
             grad_norm_clip=10,
+            args=None
         ) -> None:
         super(QMIX_agent, self).__init__()
         assert multi_steps == 1 and is_per == False and is_share_para == True, \
@@ -178,8 +178,13 @@ class QMIX_agent(nn.Module):
         
         self.params = list(self.Q.parameters())
         self.grad_norm_clip = grad_norm_clip
-        # RMSProp alpha:0.99, RMSProp epsilon:0.00001
-        self.optimizer = optimizer(self.params, learning_rate, alpha=0.99, eps=1e-5)
+        if args.optimizer == 0:
+            # Adam: 3m, 2s_vs_1sc
+            self.optimizer = torch.optim.Adam(self.params, learning_rate)
+        elif args.optimizer == 1:
+            # RMSProp alpha:0.99, RMSProp epsilon:0.00001
+            self.optimizer = torch.optim.RMSprop(self.params, learning_rate, alpha=0.99, eps=1e-5)
+        
         self.MseLoss = nn.MSELoss(reduction='sum')
 
         # Consturct buffer

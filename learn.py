@@ -43,7 +43,6 @@ def qmix_learning(
     is_share_para,
     is_evaluate,
     q_func,
-    optimizer,
     learning_rate,
     exploration,
     max_training_steps=1000000,
@@ -113,10 +112,10 @@ def qmix_learning(
             gamma=gamma, 
             replay_buffer_size=replay_buffer_size, 
             episode_limits=episode_limit,
-            batch_size=batch_size, 
-            optimizer=optimizer, 
+            batch_size=batch_size,  
             learning_rate=learning_rate,
-            grad_norm_clip=grad_norm_clip
+            grad_norm_clip=grad_norm_clip,
+            args=args
     )
 
     #############

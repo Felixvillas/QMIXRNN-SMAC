@@ -40,6 +40,8 @@ def get_args():
     parser.add_argument('--evaluate-num', type=int, default=32)
     # store hyper parameters
     parser.add_argument('--store-hyper-para', type=int, default=True)
+    # optimizer
+    parser.add_argument('--optimizer', type=int, default=0, help="0: Adam--[3m, 2s_vs_1sc]; 1: RMSprop--[others]")
 
     return parser.parse_args()
 
@@ -66,7 +68,6 @@ def main(args=get_args()):
         is_evaluate=args.is_evaluate,
         evaluate_num=args.evaluate_num,
         q_func=QMIX_agent,
-        optimizer=optim.RMSprop,
         learning_rate=args.learning_rate,
         exploration=exploration_schedule,
         max_training_steps=args.training_steps,
