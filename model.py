@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 import numpy as np
-from utils.simple_replay_buffer import EpReplayBuffer
+from utils.simple_replay_buffer import ReplayBuffer
 import random
 
 ################################## set device ##################################
@@ -188,11 +188,10 @@ class QMIX_agent(nn.Module):
         self.MseLoss = nn.MSELoss(reduction='sum')
 
         # Consturct buffer
-        self.replay_buffer = [
-            EpReplayBuffer(obs_size, num_actions, episode_limits, replay_buffer_size, multi_steps, batch_size) for _ in range(num_agents)
-        ]
-        self.replay_buffer.append(
-            EpReplayBuffer(state_size, num_actions, episode_limits, replay_buffer_size, multi_steps, batch_size)
+        self.replay_buffer = ReplayBuffer(
+            obs_dim=obs_size, state_dim=state_size, num_agents=num_agents, action_dim=num_actions,
+            ep_limits=episode_limits, ep_size=replay_buffer_size, multi_steps=multi_steps,
+            batch_size=batch_size
         )
 
     def select_actions(self, obs, avail_actions, random_selection):
@@ -210,64 +209,48 @@ class QMIX_agent(nn.Module):
 
     def update(self):
         '''update Q: 1 step of gradient descent'''
-        idxes = random.sample(range(self.replay_buffer[-1].num_in_buffer), self.batch_size)
-        obs_batch_total, _, rew_batch_total, done_total, _, max_ep_length = \
-            self.replay_buffer[-1].sample(idxes)
-        # every agent's experience
-        obs_batch = np.zeros((self.batch_size, max_ep_length, self.num_agents, self.obs_size))
-        act_batch = np.zeros((self.batch_size, max_ep_length, self.num_agents))
-        next_obs_batch = np.zeros((self.batch_size, max_ep_length, self.num_agents, self.obs_size))
-        avail_act_batch = np.zeros((self.batch_size, max_ep_length, self.num_agents, self.num_actions))
-        next_avail_act_batch = np.zeros((self.batch_size, max_ep_length, self.num_agents, self.num_actions))
-        for i in range(self.num_agents):
-            obs_batch_i, act_batch_i, _, _, avail_act_batch_i, _ = \
-                self.replay_buffer[i].sample(idxes, max_ep_length)
-            obs_batch[:, :, i, :] = obs_batch_i
-            act_batch[:, :, i] = act_batch_i
-            next_obs_batch[:, :-1, i, :] = obs_batch_i[:, 1:, :]  # the last trajectory's next obs is None
-            avail_act_batch[:, :, i, :] = avail_act_batch_i
-            next_avail_act_batch[:, :-1, i, :] = avail_act_batch_i[:, 1:, :] # the last trajectory's next avail act is None
+        obs_batchs, act_batchs, avail_act_batchs, \
+                    total_obs_batch, total_rew_batch, total_done_batch, \
+                        next_obs_batchs, next_avail_act_batchs, next_total_obs_batch = \
+            self.replay_buffer.sample()
         
         # Convert numpy nd_array to torch tensor for calculation
         # every agent's experience
-        obs_batch = torch.from_numpy(obs_batch).type(torch.FloatTensor).to(device)
-        act_batch = torch.from_numpy(act_batch).type(torch.int64).to(device)
-        next_obs_batch = torch.from_numpy(next_obs_batch).type(torch.FloatTensor).to(device)
-        avail_act_batch = torch.from_numpy(avail_act_batch).type(torch.BoolTensor).to(device)
-        next_avail_act_batch = torch.from_numpy(next_avail_act_batch).type(torch.BoolTensor).to(device)
-        
-        # Q_total's experience
-        obs_batch_total = torch.from_numpy(obs_batch_total).type(torch.FloatTensor).to(device)
-        rew_batch_total = torch.from_numpy(rew_batch_total).type(torch.FloatTensor).to(device)
-        next_obs_batch_total = torch.zeros_like(obs_batch_total).type(torch.FloatTensor).to(device)
-        next_obs_batch_total[:, :-1, :] = obs_batch_total[:, 1:, :]
-        not_done_total = torch.from_numpy(1 - done_total).type(torch.FloatTensor).to(device)
+        obs_batchs = torch.as_tensor(obs_batchs, dtype=torch.float32, device=device)
+        act_batchs = torch.as_tensor(act_batchs, dtype=torch.int64, device=device)
+        avail_act_batchs = torch.as_tensor(avail_act_batchs, dtype=torch.bool, device=device)
+        total_obs_batch = torch.as_tensor(total_obs_batch, dtype=torch.float32, device=device)
+        total_rew_batch = torch.as_tensor(total_rew_batch, dtype=torch.float32, device=device)
+        not_done_total = torch.as_tensor(1 - total_done_batch, dtype=torch.float32, device=device)
+        next_obs_batchs = torch.as_tensor(next_obs_batchs, dtype=torch.float32, device=device)
+        next_avail_act_batchs = torch.as_tensor(next_avail_act_batchs, dtype=torch.bool, device=device)
+        next_total_obs_batch = torch.as_tensor(next_total_obs_batch, dtype=torch.float32, device=device)
 
         # We choose Q based on action taken.
-        all_current_Q_values = self.Q.get_batch_value(obs_batch)
-        current_Q_values = all_current_Q_values.gather(-1, act_batch.unsqueeze(-1)).squeeze(-1)
-        total_current_Q_values = self.Q.get_batch_total(current_Q_values, obs_batch_total)
+        all_current_Q_values = self.Q.get_batch_value(obs_batchs)
+        current_Q_values = all_current_Q_values.gather(-1, act_batchs.unsqueeze(-1)).squeeze(-1)
+        total_current_Q_values = self.Q.get_batch_total(current_Q_values, total_obs_batch)
         # mask valueless current Q values: In every episode, the first step is always have value 
-        total_current_Q_values *= torch.cat((torch.ones(done_total.shape[0], 1).to(device), not_done_total[:, :-1]), dim=1)
+        total_current_Q_values *= torch.cat((torch.ones(total_done_batch.shape[0], 1).to(device), not_done_total[:, :-1]), dim=1)
         
         # compute target
-        target_Q_output = self.target_Q.get_batch_value(next_obs_batch)
+        target_Q_output = self.target_Q.get_batch_value(next_obs_batchs)
         # Mask out unavailable actions: refer to pymarl
-        target_Q_output[next_avail_act_batch == 0.0] = -9999999
+        target_Q_output[next_avail_act_batchs == 0.0] = -9999999
         if self.is_ddqn:
             # target_current_Q_values: get target values from current values
             target_current_Q_values = torch.zeros_like(target_Q_output).to(device)
             target_current_Q_values[:, :-1] = all_current_Q_values.clone().detach()[:, 1:]
             # target_current_Q_values = self.Q.get_batch_value(next_obs_batch).detach()
-            target_current_Q_values[next_avail_act_batch == 0.0] = -9999999
+            target_current_Q_values[next_avail_act_batchs == 0.0] = -9999999
             target_act_batch = target_current_Q_values.max(-1)[1]
             target_Q_values = target_Q_output.gather(-1, target_act_batch.unsqueeze(-1)).squeeze(-1)
         else:
             target_Q_values = target_Q_output.max(-1)[0]
 
-        total_target_Q_values = self.target_Q.get_batch_total(target_Q_values, next_obs_batch_total)
+        total_target_Q_values = self.target_Q.get_batch_total(target_Q_values, next_total_obs_batch)
         # mask valueless target Q values and compute the target of the current Q values
-        total_target_Q_values = rew_batch_total + self.gamma * not_done_total * total_target_Q_values
+        total_target_Q_values = total_rew_batch + self.gamma * not_done_total * total_target_Q_values
         
         # take gradient step
         # compute loss: Detach variable from the current graph since we don't want gradients for next Q to propagated

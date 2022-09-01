@@ -176,22 +176,16 @@ def qmix_learning(
         # Resets the environment when reaching an episode boundary
         if done:
             # store one episode experience into buffer
-            for i in range(num_agents):
-                episode_dict = {
-                    'obs': episode_obs[:, i], 
-                    'action': episode_action[:, i], 
-                    'reward': episode_reward, 
-                    'avail_action': episode_avail_action[:, i]
-                }
-                QMIX_agent.replay_buffer[i].store(episode_dict, episode_len)
-
             episode_dict = {
-                'obs': episode_state, 
-                'action': np.zeros(episode_limit), 
-                'reward': episode_reward, 
-                'avail_action': np.zeros((episode_limit, num_actions))
+                'obs': episode_obs, 
+                'action': episode_action, 
+                'avail_action': episode_avail_action
             }
-            QMIX_agent.replay_buffer[-1].store(episode_dict, episode_len)
+            total_episode_dict = {
+                'obs': episode_state, 
+                'reward': episode_reward, 
+            }
+            QMIX_agent.replay_buffer.store(episode_dict, total_episode_dict, episode_len)
 
             # tensorboard log
             rewards_queue.append(sum(ep_rewards))
