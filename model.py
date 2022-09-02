@@ -24,6 +24,7 @@ class QMIX(nn.Module):
     def __init__(self, obs_size=16, state_size=32, num_agents=2, num_actions=5) -> None:
         super(QMIX, self).__init__()
         self.obs_size = obs_size
+        self.state_size = state_size
         self.num_agents = num_agents
         self.num_actions = num_actions
         self.net_embed_dim = 64
@@ -84,9 +85,11 @@ class QMIX(nn.Module):
 
         q_value = []
         for t in range(timesteps):
-            # note: (batch_size, num_agents, dim) --> (batch_size*num_agents, dim) [###By tensor.reshape]
-            # As there is no temporal relationship among agents and nn.GRUCell can only accept 2-D data as inputs, 
-            # so we can concatenate batch_size experiences of different agents for faster cuda parallel computing
+            '''
+              note: (batch_size, num_agents, dim) --> (batch_size*num_agents, dim) [###By tensor.reshape]
+              As there is no temporal relationship among agents and nn.GRUCell can only accept 2-D data as inputs, 
+              so we can concatenate batch_size experiences of different agents for faster cuda parallel computing
+            '''
             q_1 = F.relu(self.fc1(obs[:, t].reshape(-1, obs_dim)))
             rnn_value = self.rnn(q_1, self.train_rnn_hidden.reshape(-1, hidden_dim))
             q_2 = self.fc2(rnn_value)
@@ -100,28 +103,34 @@ class QMIX(nn.Module):
         # input: max_q_value: (batch_size, episode_limits, num_agents)
         #        state      : (batch_size, episode_limits, state_size)
         # output:q_total    : (batch_size, episode_limits)
+        '''
+          note: (batch_size, episode_limits, dim) --> (batch_size*episode_limits, dim) [###By tensor.reshape]
+          like get_batch_value, for faster(actually uncertain) cuda parallel computing
+        '''
+        batch_size, timesteps, _ = state.shape
+        state = state.reshape(-1, self.state_size)
+        max_q_value = max_q_value.reshape(-1, 1, self.num_agents)
         w1, b1, w2, b2 = self.get_mix_weight(state)
         # First layer
-        q_total_1 = F.elu(torch.matmul(max_q_value.unsqueeze(-2), w1) + b1)
+        q_total_1 = F.elu(torch.bmm(max_q_value, w1) + b1)
         # Second layer
-        q_total_2 = torch.matmul(q_total_1, w2) + b2
+        q_total_2 = torch.bmm(q_total_1, w2) + b2
 
-        q_total = q_total_2.squeeze()
+        q_total = q_total_2.squeeze().reshape(batch_size, timesteps)
         return q_total
 
 
-    def forward(self, obs, avail_actions=None, is_train=True):
+    def forward(self, obs, *args, **kwargs):
         raise NotImplementedError
 
     def get_mix_weight(self, state):
         # q_total weight
-        w1 = self.hyper_w1(state)
-        b1 = self.hyper_b1(state)
-        w2 = self.hyper_w2(state)
-        b2 = self.hyper_b2(state)
-        return F.softmax(w1.view(state.shape[0], state.shape[1], self.num_agents, self.mix_embed_dim), dim=-2), \
-               b1.unsqueeze(-2), \
-               F.softmax(w2.unsqueeze(-1), dim=-2), b2.unsqueeze(-1)
+        w1 = self.hyper_w1(state).reshape(-1, self.num_agents, self.mix_embed_dim)
+        b1 = self.hyper_b1(state).unsqueeze(-2)
+        w2 = self.hyper_w2(state).unsqueeze(-1)
+        b2 = self.hyper_b2(state).unsqueeze(-1)
+        # return torch.abs(w1), b1, torch.abs(w2), b2
+        return F.softmax(w1, dim=-2), b1, F.softmax(w2, -2), b2
 
     def init_train_rnn_hidden(self, episode_num):
         # init a gru_hidden for every agent of every episode during training
@@ -197,7 +206,7 @@ class QMIX_agent(nn.Module):
         )
 
     def select_actions(self, obs, avail_actions, random_selection):
-        '''greedily select actions according to current obs'''
+        '''epsilon greedily select actions according to current obs'''
         # input : obs:(num_agents, obs_shape), avail_actions:(num_agents, num_actions), random_selection:(num_agents,)
         # output: actions: a list that length is num_agents
         obs = torch.from_numpy(obs).type(torch.FloatTensor).to(device)
@@ -243,7 +252,6 @@ class QMIX_agent(nn.Module):
             # target_current_Q_values: get target values from current values
             target_current_Q_values = torch.zeros_like(target_Q_output).to(device)
             target_current_Q_values[:, :-1] = all_current_Q_values.clone().detach()[:, 1:]
-            # target_current_Q_values = self.Q.get_batch_value(next_obs_batch).detach()
             target_current_Q_values[next_avail_act_batchs == 0.0] = -9999999
             target_act_batch = target_current_Q_values.max(-1)[1]
             target_Q_values = target_Q_output.gather(-1, target_act_batch.unsqueeze(-1)).squeeze(-1)
