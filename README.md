@@ -4,6 +4,7 @@ This clear implementation can help you figure out how does QMIX work
 
 ## Run
 **StarCraft2 version: SC2.4.6.2.69232 (harder than SC2.4.10)**
+
 Note: --optimizer=0/1(N) means that optimizer both `0: Adam` and `1: RMSprop` are good on this scenario, while number N in brackets means which optimizer is more suitable. Please just select one from 0/1 when running.
 ```shell
 python main.py --map-name=3s5z --optimizer=0/1(1)
