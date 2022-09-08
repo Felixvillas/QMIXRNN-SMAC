@@ -134,11 +134,11 @@ class QMIX(nn.Module):
 
     def init_train_rnn_hidden(self, episode_num):
         # init a gru_hidden for every agent of every episode during training
-        self.train_rnn_hidden = torch.zeros((episode_num, self.num_agents, self.net_embed_dim)).to(device)
+        self.train_rnn_hidden = torch.zeros((episode_num, self.num_agents, self.net_embed_dim), dtype=torch.float32, device=device)
 
     def init_eval_rnn_hidden(self):
         # init a gru_hidden for every agent of every episode during evaluating
-        self.eval_rnn_hidden = torch.zeros((self.num_agents, self.net_embed_dim)).to(device)
+        self.eval_rnn_hidden = torch.zeros((self.num_agents, self.net_embed_dim), dtype=torch.float32, device=device)
 
 
 class QMIX_agent(nn.Module):
@@ -205,12 +205,15 @@ class QMIX_agent(nn.Module):
             batch_size=batch_size
         )
 
+    def can_sample(self):
+        return self.replay_buffer.num_in_buffer >= self.batch_size
+
     def select_actions(self, obs, avail_actions, random_selection):
         '''epsilon greedily select actions according to current obs'''
         # input : obs:(num_agents, obs_shape), avail_actions:(num_agents, num_actions), random_selection:(num_agents,)
         # output: actions: a list that length is num_agents
-        obs = torch.from_numpy(obs).type(torch.FloatTensor).to(device)
-        avail_actions = torch.BoolTensor(avail_actions).to(device)
+        obs = torch.as_tensor(obs, dtype=torch.float32, device=device)
+        avail_actions = torch.as_tensor(avail_actions, dtype=torch.bool, device=device)
         q_values = self.Q.get_value(obs)
         q_values[avail_actions == 0.0] = -float('inf')
         max_actions = q_values.max(-1)[1].cpu()
@@ -241,8 +244,13 @@ class QMIX_agent(nn.Module):
         all_current_Q_values = self.Q.get_batch_value(obs_batchs)
         current_Q_values = all_current_Q_values.gather(-1, act_batchs.unsqueeze(-1)).squeeze(-1)
         total_current_Q_values = self.Q.get_batch_total(current_Q_values, total_obs_batch)
-        # mask valueless current Q values: In every episode, the first step is always have value 
-        total_current_Q_values *= torch.cat((torch.ones(total_done_batch.shape[0], 1).to(device), not_done_total[:, :-1]), dim=1)
+        # mask valueless current Q values: In every episode, the first step is always have value
+        mask = torch.cat(
+            (torch.ones(size=(total_done_batch.shape[0], 1), dtype=torch.float32, device=device), not_done_total[:, :-1]),
+            dim=1
+        )
+        # mask = torch.cat((torch.ones(total_done_batch.shape[0], 1).to(device), not_done_total[:, :-1]), dim=1)
+        total_current_Q_values *= mask
         
         # compute target
         target_Q_output = self.target_Q.get_batch_value(next_obs_batchs)
@@ -250,7 +258,7 @@ class QMIX_agent(nn.Module):
         target_Q_output[next_avail_act_batchs == 0.0] = -9999999
         if self.is_ddqn:
             # target_current_Q_values: get target values from current values
-            target_current_Q_values = torch.zeros_like(target_Q_output).to(device)
+            target_current_Q_values = torch.zeros_like(target_Q_output, dtype=torch.float32, device=device)
             target_current_Q_values[:, :-1] = all_current_Q_values.clone().detach()[:, 1:]
             target_current_Q_values[next_avail_act_batchs == 0.0] = -9999999
             target_act_batch = target_current_Q_values.max(-1)[1]
@@ -265,7 +273,7 @@ class QMIX_agent(nn.Module):
         # take gradient step
         # compute loss: Detach variable from the current graph since we don't want gradients for next Q to propagated
         loss = self.MseLoss(total_current_Q_values, total_target_Q_values.detach())
-        loss = loss / not_done_total.sum()
+        loss = loss / mask.sum()
         # Clear previous gradients before backward pass
         self.optimizer.zero_grad()
         # run backward pass

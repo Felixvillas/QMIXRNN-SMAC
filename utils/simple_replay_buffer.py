@@ -97,7 +97,6 @@ class ReplayBuffer:
         return next_timestep_np
 
     def sample(self):
-        assert self.batch_size <= self.num_in_buffer
         idxes = random.sample(range(self.num_in_buffer), self.batch_size)
         total_obs_batch, total_rew_batch, total_done_batch, max_ep_len = self.total_buffer.sample(idxes)
         obs_batchs, act_batchs, avail_act_batchs = self.buffers.sample(idxes, max_ep_len)

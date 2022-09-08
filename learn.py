@@ -150,7 +150,7 @@ def qmix_learning(
         avail_actions = env.get_avail_actions()
 
         # Choose random action if not yet start learning else eps-greedily select actions
-        if t > learning_starts:
+        if t >= learning_starts:
             random_selection = np.random.random(num_agents) < exploration.value(t-learning_starts)
             # last_obs is a list of array that shape is (obs_shape,) --> numpy.array:(num_agents, obs_shape)
             recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in last_obs], axis=0)
@@ -223,7 +223,7 @@ def qmix_learning(
             QMIX_agent.increase_bate(t, max_training_steps)
 
         # train and evaluate
-        if (t > learning_starts and done):
+        if (t >= learning_starts and done and QMIX_agent.can_sample()):
             # gradient descent: train
             loss = QMIX_agent.update()
             num_param_update += 1
