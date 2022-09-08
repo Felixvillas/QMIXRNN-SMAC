@@ -144,66 +144,76 @@ class QMIX(nn.Module):
 class QMIX_agent(nn.Module):
     def __init__(
             self,
-            obs_size=16, 
-            state_size=32, 
-            num_agents=2, 
-            num_actions=5, 
-            is_share_para=False, 
-            is_ddqn=True, 
-            multi_steps=8,
-            is_per=False, 
-            alpha=0.6, 
-            beta=0.2, 
-            prior_eps=1e-6, 
-            gamma=0.99, 
-            replay_buffer_size=5000, 
-            episode_limits=60,
-            batch_size=32, 
-            learning_rate=3e-4,
-            grad_norm_clip=10,
+            env_class=None,
             args=None
         ) -> None:
         super(QMIX_agent, self).__init__()
-        assert multi_steps == 1 and is_per == False and is_share_para == True, \
+        assert args.multi_steps == 1 and args.is_per == False and args.share_para == True, \
             f"Now QMIX with rnn is not compatible with multi_steps and per, \
                 as well as only compatible with share net para"
-        self.obs_size = obs_size
-        self.state_size = state_size
-        self.num_agents = num_agents
-        self.num_actions = num_actions
-        self.is_ddqn = is_ddqn
-        self.multi_steps = multi_steps
-        self.is_per = is_per
-        self.alpha = alpha
-        self.beta = beta
-        self.prior_eps = prior_eps
-        self.gamma = gamma
-        self.episode_limits = episode_limits
-        self.batch_size = batch_size
+        self.env = env_class(map_name=args.map_name, seed=args.seed)
+        self.env_info = self.env.get_env_info()
+        self.obs_size = self.env_info['obs_shape']
+        self.state_size = self.env_info['state_shape']
+        self.num_agents = self.env_info['n_agents']
+        self.num_actions = self.env_info['n_actions']
+        self.episode_limits = self.env_info['episode_limit']
+
+        self.is_ddqn = args.is_ddqn
+        self.multi_steps = args.multi_steps
+        self.is_per = args.is_per
+        self.alpha = args.alpha
+        self.beta = args.beta
+        self.prior_eps = args.prior_eps
+        self.gamma = args.gamma
+        self.batch_size = args.batch_size
         
         # Construct Q_net and target_Q_net
-        self.Q = QMIX(obs_size, state_size, num_agents, num_actions).to(device)
-        self.target_Q = QMIX(obs_size, state_size, num_agents, num_actions).to(device)
+        self.Q = QMIX(self.obs_size, self.state_size, self.num_agents, self.num_actions).to(device)
+        self.target_Q = QMIX(self.obs_size, self.state_size, self.num_agents, self.num_actions).to(device)
         self.Q.orth_init() # orthogonal initialization
         self.target_Q.load_state_dict(self.Q.state_dict())
         
         self.params = list(self.Q.parameters())
-        self.grad_norm_clip = grad_norm_clip
+        self.grad_norm_clip = args.grad_norm_clip
         if args.optimizer == 0:
             # Adam: 3m, 2s_vs_1sc
-            self.optimizer = torch.optim.Adam(self.params, learning_rate)
+            self.optimizer = torch.optim.Adam(self.params, args.learning_rate)
         elif args.optimizer == 1:
             # RMSProp alpha:0.99, RMSProp epsilon:0.00001
-            self.optimizer = torch.optim.RMSprop(self.params, learning_rate, alpha=0.99, eps=1e-5)
+            self.optimizer = torch.optim.RMSprop(self.params, args.learning_rate, alpha=0.99, eps=1e-5)
         
         self.MseLoss = nn.MSELoss(reduction='sum')
 
         # Consturct buffer
         self.replay_buffer = ReplayBuffer(
-            obs_dim=obs_size, state_dim=state_size, num_agents=num_agents, action_dim=num_actions,
-            ep_limits=episode_limits, ep_size=replay_buffer_size, multi_steps=multi_steps,
-            batch_size=batch_size
+            obs_dim=self.obs_size, state_dim=self.state_size, num_agents=self.num_agents, action_dim=self.num_actions,
+            ep_limits=self.episode_limits, ep_size=args.replay_buffer_size, multi_steps=self.multi_steps,
+            batch_size=self.batch_size
         )
+
+    def get_env_info(self):
+        return self.obs_size, self.state_size, self.num_actions, self.num_agents, self.episode_limits
+    
+    def reset(self):
+        self.env.reset()
+        # init rnn_hidden and numpy of episode experience in the start of every episode
+        self.Q.init_eval_rnn_hidden()
+
+    def get_obs(self, last_action=None):
+        return self.env.get_obs(last_action)
+    
+    def get_state(self):
+        return self.env.get_state()
+
+    def get_avail_actions(self):
+        return self.env.get_avail_actions()
+    
+    def step(self, action):
+        return self.env.step(action)
+    
+    def close(self):
+        self.env.close()
 
     def can_sample(self):
         return self.replay_buffer.num_in_buffer >= self.batch_size
@@ -306,22 +316,22 @@ class QMIX_agent(nn.Module):
         self.Q.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))
         self.target_Q.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))
 
-    def evaluate(self, env, episode_num=32):
+    def evaluate(self, episode_num=32):
         '''evaluate Q model'''
         eval_data = []
         for _ in range(episode_num):
             eval_ep_rewards = []
             done = False
             action = None
-            env.reset()
+            self.env.reset()
             self.Q.init_eval_rnn_hidden()
             while not done:
-                last_obs = env.get_obs(action)
-                avail_actions = env.get_avail_actions()
+                last_obs = self.env.get_obs(action)
+                avail_actions = self.env.get_avail_actions()
                 recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in last_obs], axis=0)
                 random_selection = np.zeros(self.num_agents).astype(np.bool_)
                 action = self.select_actions(recent_observations, avail_actions, random_selection)
-                reward, done, info = env.step(action)
+                reward, done, info = self.env.step(action)
                 eval_ep_rewards.append(reward)
 
                 if done:
