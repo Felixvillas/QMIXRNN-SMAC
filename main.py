@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument('--learning-starts', type=int, default=0)
     parser.add_argument('--target-update-freq', type=int, default=200)
     parser.add_argument('--save-model-freq', type=int, default=2000)
+    parser.add_argument('--test-freq', type=int, default=10000)
     parser.add_argument('--learning-rate', type=float, default=3e-4)
     parser.add_argument('--grad-norm-clip', type=float, default=0.5)
     # seed

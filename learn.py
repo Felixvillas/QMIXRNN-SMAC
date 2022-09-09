@@ -40,6 +40,7 @@ def qmix_learning(
     Parameters:
     '''
     assert args.save_model_freq % args.target_update_freq == 0
+    last_test_t, num_test = -args.test_freq - 1, 0
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
@@ -182,14 +183,17 @@ def qmix_learning(
             writer.add_scalar(tag=f'starcraft{env_name}_train/loss', scalar_value=loss, global_step=t+1)
 
             # Periodically update the target network by Q network to target Q network
-            # and evaluate the Q-net in greedy mode
             if num_param_update % args.target_update_freq == 0:
                 QMIX_agent.update_targets()
-                # evaluate the Q-net in greedy mode
+            # evaluate the Q-net in greedy mode
+            if (t - last_test_t) / args.test_freq >= 1.0:
                 eval_data = QMIX_agent.evaluate(args.evaluate_num)                               
-                writer.add_scalar(tag=f'starcraft{env_name}_eval/reward', scalar_value=eval_data[0], global_step=t+1)
-                writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=eval_data[1], global_step=t+1)
-                writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=eval_data[2], global_step=t+1)
+                writer.add_scalar(tag=f'starcraft{env_name}_eval/reward', scalar_value=eval_data[0], global_step=num_test * args.test_freq)
+                writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=eval_data[1], global_step=num_test * args.test_freq)
+                writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=eval_data[2], global_step=num_test * args.test_freq)
+                last_test_t = t
+                num_test += 1
+            # model save
             if num_param_update % args.save_model_freq == 0:
                 QMIX_agent.save(checkpoint_path=os.path.join(log_dir, 'agent.pth'))
 

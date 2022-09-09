@@ -339,7 +339,8 @@ class QMIX_agent(nn.Module):
                         [sum(eval_ep_rewards), len(eval_ep_rewards), 1. if 'battle_won' in info and info['battle_won'] else 0.]
                     )
 
-        start = episode_num // 4
-        end = episode_num * 3 // 4
-        sort_eval_data = sorted(eval_data, key=lambda x: x[-1])[start: end] # sorted by win or nor
-        return np.mean(sort_eval_data, axis=0)
+        # start = episode_num // 4
+        # end = episode_num * 3 // 4
+        # sort_eval_data = sorted(eval_data, key=lambda x: x[-1])[start: end] # sorted by win or nor
+        # return np.mean(sort_eval_data, axis=0)
+        return np.mean(eval_data, axis=0)
