@@ -144,15 +144,14 @@ class QMIX(nn.Module):
 class QMIX_agent(nn.Module):
     def __init__(
             self,
-            env_class=None,
+            env_info=None,
             args=None
         ) -> None:
         super(QMIX_agent, self).__init__()
         assert args.multi_steps == 1 and args.is_per == False and args.share_para == True, \
             f"Now QMIX with rnn is not compatible with multi_steps and per, \
                 as well as only compatible with share net para"
-        self.env = env_class(map_name=args.map_name, seed=args.seed)
-        self.env_info = self.env.get_env_info()
+        self.env_info = env_info
         self.obs_size = self.env_info['obs_shape']
         self.state_size = self.env_info['state_shape']
         self.num_agents = self.env_info['n_agents']
@@ -171,7 +170,7 @@ class QMIX_agent(nn.Module):
         # Construct Q_net and target_Q_net
         self.Q = QMIX(self.obs_size, self.state_size, self.num_agents, self.num_actions).to(device)
         self.target_Q = QMIX(self.obs_size, self.state_size, self.num_agents, self.num_actions).to(device)
-        self.Q.orth_init() # orthogonal initialization
+        # self.Q.orth_init() # orthogonal initialization
         self.target_Q.load_state_dict(self.Q.state_dict())
         
         self.params = list(self.Q.parameters())
@@ -194,26 +193,6 @@ class QMIX_agent(nn.Module):
 
     def get_env_info(self):
         return self.obs_size, self.state_size, self.num_actions, self.num_agents, self.episode_limits
-    
-    def reset(self):
-        self.env.reset()
-        # init rnn_hidden and numpy of episode experience in the start of every episode
-        self.Q.init_eval_rnn_hidden()
-
-    def get_obs(self, last_action=None):
-        return self.env.get_obs(last_action)
-    
-    def get_state(self):
-        return self.env.get_state()
-
-    def get_avail_actions(self):
-        return self.env.get_avail_actions()
-    
-    def step(self, action):
-        return self.env.step(action)
-    
-    def close(self):
-        self.env.close()
 
     def can_sample(self):
         return self.replay_buffer.num_in_buffer >= self.batch_size
@@ -316,22 +295,22 @@ class QMIX_agent(nn.Module):
         self.Q.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))
         self.target_Q.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))
 
-    def evaluate(self, episode_num=32):
+    def evaluate(self, env, episode_num=32):
         '''evaluate Q model'''
         eval_data = []
         for _ in range(episode_num):
             eval_ep_rewards = []
             done = False
             action = None
-            self.env.reset()
+            env.reset()
             self.Q.init_eval_rnn_hidden()
             while not done:
-                last_obs = self.env.get_obs(action)
-                avail_actions = self.env.get_avail_actions()
+                last_obs = env.get_obs(action)
+                avail_actions = env.get_avail_actions()
                 recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in last_obs], axis=0)
                 random_selection = np.zeros(self.num_agents).astype(np.bool_)
                 action = self.select_actions(recent_observations, avail_actions, random_selection)
-                reward, done, info = self.env.step(action)
+                reward, done, info = env.step(action)
                 eval_ep_rewards.append(reward)
 
                 if done:

@@ -44,9 +44,12 @@ def qmix_learning(
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
+    # Initialize Env
+    env = env_class(map_name=args.map_name, seed=args.seed)
+    env_info = env.get_env_info()
     # Initialize QMIX_agent
     QMIX_agent = q_func(
-            env_class=env_class,
+            env_info=env_info,
             args=args
     )
     obs_size, state_size, num_actions, num_agents, episode_limit = QMIX_agent.get_env_info()
@@ -77,12 +80,13 @@ def qmix_learning(
     #  RUN ENV  #
     #############
     num_param_update = 0
-    QMIX_agent.reset()
+    env.reset()
+    QMIX_agent.Q.init_eval_rnn_hidden()
     episode_obs, episode_state, episode_action, episode_reward, episode_avail_action = \
         init_episode_temp(episode_limit, state_size, num_agents, obs_size, num_actions)
 
-    last_obs = QMIX_agent.get_obs()
-    last_state = QMIX_agent.get_state()
+    last_obs = env.get_obs()
+    last_state = env.get_state()
     # for episode experience
     ep_rewards = []
     episode_len = 0
@@ -100,7 +104,7 @@ def qmix_learning(
     for t in tqdm(range(args.training_steps)):
 
         # get avail action for every agent
-        avail_actions = QMIX_agent.get_avail_actions()
+        avail_actions = env.get_avail_actions()
 
         # Choose random action if not yet start learning else eps-greedily select actions
         if t >= args.learning_starts:
@@ -113,7 +117,7 @@ def qmix_learning(
             action = [action[i].item() for i in range(num_agents)]
         
         # Advance one step
-        reward, done, info = QMIX_agent.step(action)
+        reward, done, info = env.step(action)
 
         # experience
         episode_obs[episode_len] = np.concatenate([np.expand_dims(ob, axis=0) for ob in last_obs], axis=0)
@@ -123,8 +127,8 @@ def qmix_learning(
         episode_avail_action[episode_len] = np.array(avail_actions)
 
         ep_rewards.append(reward)
-        obs = QMIX_agent.get_obs(action)
-        state = QMIX_agent.get_state()
+        obs = env.get_obs(action)
+        state = env.get_state()
 
         # Resets the environment when reaching an episode boundary
         if done:
@@ -157,9 +161,10 @@ def qmix_learning(
             ep_rewards = []
             episode_len = 0
             
-            QMIX_agent.reset()
-            obs = QMIX_agent.get_obs()
-            state = QMIX_agent.get_state()
+            env.reset()
+            QMIX_agent.Q.init_eval_rnn_hidden()
+            obs = env.get_obs()
+            state = env.get_state()
             # init para for new episide
             episode_obs, episode_state, episode_action, episode_reward, episode_avail_action = \
                 init_episode_temp(episode_limit, state_size, num_agents, obs_size, num_actions)
@@ -187,7 +192,7 @@ def qmix_learning(
                 QMIX_agent.update_targets()
             # evaluate the Q-net in greedy mode
             if (t - last_test_t) / args.test_freq >= 1.0:
-                eval_data = QMIX_agent.evaluate(args.evaluate_num)                               
+                eval_data = QMIX_agent.evaluate(env, args.evaluate_num)                               
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/reward', scalar_value=eval_data[0], global_step=num_test * args.test_freq)
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=eval_data[1], global_step=num_test * args.test_freq)
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=eval_data[2], global_step=num_test * args.test_freq)
@@ -223,4 +228,4 @@ def qmix_learning(
     plt.savefig(log_dir + env_name)
 
     writer.close()
-    QMIX_agent.close()
+    env.close()

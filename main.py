@@ -12,17 +12,17 @@ def get_args():
     parser.add_argument('--map-name', type=str, default='8m')
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--training-steps', type=int, default=2000000)
-    parser.add_argument('--anneal-steps', type=int, default=100000)
+    parser.add_argument('--training-steps', type=int, default=2005000)
+    parser.add_argument('--anneal-steps', type=int, default=50000)
     parser.add_argument('--anneal-start', type=float, default=1.0)
-    parser.add_argument('--anneal-end', type=float, default=0.01)
+    parser.add_argument('--anneal-end', type=float, default=0.05)
     parser.add_argument('--replay-buffer-size', type=int, default=5000)
     parser.add_argument('--learning-starts', type=int, default=0)
     parser.add_argument('--target-update-freq', type=int, default=200)
     parser.add_argument('--save-model-freq', type=int, default=2000)
     parser.add_argument('--test-freq', type=int, default=10000)
-    parser.add_argument('--learning-rate', type=float, default=3e-4)
-    parser.add_argument('--grad-norm-clip', type=float, default=0.5)
+    parser.add_argument('--learning-rate', type=float, default=5e-4)
+    parser.add_argument('--grad-norm-clip', type=float, default=10)
     # seed
     parser.add_argument('--seed', type=int, default=0)
     # ddqn
@@ -42,7 +42,7 @@ def get_args():
     # store hyper parameters
     parser.add_argument('--store-hyper-para', type=int, default=True)
     # optimizer
-    parser.add_argument('--optimizer', type=int, default=0, help="0: Adam--[3m, 2s_vs_1sc]; 1: RMSprop--[others]")
+    parser.add_argument('--optimizer', type=int, default=1, help="0: Adam--[3m, 2s_vs_1sc]; 1: RMSprop--[others]")
 
     return parser.parse_args()
 
