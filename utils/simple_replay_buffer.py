@@ -1,5 +1,4 @@
 import numpy as np
-import random
 
 class EpReplayBuffers:
     '''
@@ -53,7 +52,7 @@ class TotalEpReplayBuffer(EpReplayBuffers):
 
     def sample(self, idxes):
         # sample batch_size episode experience in uniform distribution
-        max_ep_len = max(self.ep_length[idxes])
+        max_ep_len = max(self.ep_length[idxes]) + 1
         # get experience
         obs_batch = self.obs[idxes][:, :max_ep_len]
         rew_batch = self.reward[idxes][:, :max_ep_len]
@@ -76,11 +75,11 @@ class ReplayBuffer:
 
         self.buffers = EpReplayBuffers(
             obs_dim=obs_dim, num_agents=num_agents, action_dim=action_dim,
-            ep_limits=ep_limits, ep_size=ep_size, multi_steps=multi_steps,
+            ep_limits=ep_limits+1, ep_size=ep_size, multi_steps=multi_steps,
             batch_size=batch_size
         )
         self.total_buffer = TotalEpReplayBuffer(
-            obs_dim=state_dim, action_dim=action_dim, ep_limits=ep_limits, 
+            obs_dim=state_dim, action_dim=action_dim, ep_limits=ep_limits+1, 
             ep_size=ep_size, multi_steps=multi_steps, batch_size=batch_size
         )
     
@@ -90,19 +89,20 @@ class ReplayBuffer:
 
         self.next_idx = (self.next_idx + 1) % self.ep_size
         self.num_in_buffer = min(self.num_in_buffer + 1, self.ep_size)
-    
-    def next_timestep(self, current_timestep_np):
-        next_timestep_np = np.zeros_like(current_timestep_np)
-        next_timestep_np[:, :-1] = current_timestep_np[:, 1:]
-        return next_timestep_np
 
     def sample(self):
-        idxes = random.sample(range(self.num_in_buffer), self.batch_size)
+        idxes = np.random.choice(range(self.num_in_buffer), self.batch_size, replace=False).tolist()
         total_obs_batch, total_rew_batch, total_done_batch, max_ep_len = self.total_buffer.sample(idxes)
         obs_batchs, act_batchs, avail_act_batchs = self.buffers.sample(idxes, max_ep_len)
-        next_obs_batchs = self.next_timestep(obs_batchs)
-        next_avail_act_batchs = self.next_timestep(avail_act_batchs)
-        next_total_obs_batch = self.next_timestep(total_obs_batch)
+        next_obs_batchs = obs_batchs[:, 1:]
+        next_avail_act_batchs = avail_act_batchs[:, 1:]
+        next_total_obs_batch = total_obs_batch[:, 1:]
+        # obs_batchs = obs_batchs[:, :-1]
+        act_batchs = act_batchs[:, :-1]
+        avail_act_batchs = avail_act_batchs[:, :-1]
+        total_obs_batch = total_obs_batch[:, :-1]
+        total_rew_batch = total_rew_batch[:, :-1]
+        total_done_batch = total_done_batch[:, :-1]
         return obs_batchs, act_batchs, avail_act_batchs, \
                     total_obs_batch, total_rew_batch, total_done_batch, \
                         next_obs_batchs, next_avail_act_batchs, next_total_obs_batch

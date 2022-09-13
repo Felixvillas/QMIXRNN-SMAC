@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 import numpy as np
 from utils.simple_replay_buffer import ReplayBuffer
-import random
 
 ################################## set device ##################################
 print("============================================================================================")
@@ -129,8 +128,8 @@ class QMIX(nn.Module):
         b1 = self.hyper_b1(state).unsqueeze(-2)
         w2 = self.hyper_w2(state).unsqueeze(-1)
         b2 = self.hyper_b2(state).unsqueeze(-1)
-        # return torch.abs(w1), b1, torch.abs(w2), b2
-        return F.softmax(w1, dim=-2), b1, F.softmax(w2, -2), b2
+        return torch.abs(w1), b1, torch.abs(w2), b2
+        # return F.softmax(w1, dim=-2), b1, F.softmax(w2, -2), b2
 
     def init_train_rnn_hidden(self, episode_num):
         # init a gru_hidden for every agent of every episode during training
@@ -181,8 +180,6 @@ class QMIX_agent(nn.Module):
         elif args.optimizer == 1:
             # RMSProp alpha:0.99, RMSProp epsilon:0.00001
             self.optimizer = torch.optim.RMSprop(self.params, args.learning_rate, alpha=0.99, eps=1e-5)
-        
-        self.MseLoss = nn.MSELoss(reduction='sum')
 
         # Consturct buffer
         self.replay_buffer = ReplayBuffer(
@@ -212,7 +209,7 @@ class QMIX_agent(nn.Module):
 
     def update(self):
         '''update Q: 1 step of gradient descent'''
-        obs_batchs, act_batchs, avail_act_batchs, \
+        obs_batchs, act_batchs, _, \
                     total_obs_batch, total_rew_batch, total_done_batch, \
                         next_obs_batchs, next_avail_act_batchs, next_total_obs_batch = \
             self.replay_buffer.sample()
@@ -221,7 +218,6 @@ class QMIX_agent(nn.Module):
         # every agent's experience
         obs_batchs = torch.as_tensor(obs_batchs, dtype=torch.float32, device=device)
         act_batchs = torch.as_tensor(act_batchs, dtype=torch.int64, device=device)
-        avail_act_batchs = torch.as_tensor(avail_act_batchs, dtype=torch.bool, device=device)
         total_obs_batch = torch.as_tensor(total_obs_batch, dtype=torch.float32, device=device)
         total_rew_batch = torch.as_tensor(total_rew_batch, dtype=torch.float32, device=device)
         not_done_total = torch.as_tensor(1 - total_done_batch, dtype=torch.float32, device=device)
@@ -231,15 +227,8 @@ class QMIX_agent(nn.Module):
 
         # We choose Q based on action taken.
         all_current_Q_values = self.Q.get_batch_value(obs_batchs)
-        current_Q_values = all_current_Q_values.gather(-1, act_batchs.unsqueeze(-1)).squeeze(-1)
+        current_Q_values = all_current_Q_values[:, :-1].gather(-1, act_batchs.unsqueeze(-1)).squeeze(-1)
         total_current_Q_values = self.Q.get_batch_total(current_Q_values, total_obs_batch)
-        # mask valueless current Q values: In every episode, the first step is always have value
-        mask = torch.cat(
-            (torch.ones(size=(total_done_batch.shape[0], 1), dtype=torch.float32, device=device), not_done_total[:, :-1]),
-            dim=1
-        )
-        # mask = torch.cat((torch.ones(total_done_batch.shape[0], 1).to(device), not_done_total[:, :-1]), dim=1)
-        total_current_Q_values *= mask
         
         # compute target
         target_Q_output = self.target_Q.get_batch_value(next_obs_batchs)
@@ -247,8 +236,7 @@ class QMIX_agent(nn.Module):
         target_Q_output[next_avail_act_batchs == 0.0] = -9999999
         if self.is_ddqn:
             # target_current_Q_values: get target values from current values
-            target_current_Q_values = torch.zeros_like(target_Q_output, dtype=torch.float32, device=device)
-            target_current_Q_values[:, :-1] = all_current_Q_values.clone().detach()[:, 1:]
+            target_current_Q_values = all_current_Q_values.clone().detach()[:, 1:]
             target_current_Q_values[next_avail_act_batchs == 0.0] = -9999999
             target_act_batch = target_current_Q_values.max(-1)[1]
             target_Q_values = target_Q_output.gather(-1, target_act_batch.unsqueeze(-1)).squeeze(-1)
@@ -260,9 +248,14 @@ class QMIX_agent(nn.Module):
         total_target_Q_values = total_rew_batch + self.gamma * not_done_total * total_target_Q_values
         
         # take gradient step
+        # mask valueless current Q values: In every episode, the first step is always have value
+        mask = torch.cat(
+            (torch.ones(size=(total_done_batch.shape[0], 1), dtype=torch.float32, device=device), not_done_total[:, :-1]),
+            dim=1
+        )
         # compute loss: Detach variable from the current graph since we don't want gradients for next Q to propagated
-        loss = self.MseLoss(total_current_Q_values, total_target_Q_values.detach())
-        loss = loss / mask.sum()
+        mask_td_error = (total_current_Q_values - total_target_Q_values.detach()) * mask
+        loss = (mask_td_error ** 2).sum() / mask.sum()
         # Clear previous gradients before backward pass
         self.optimizer.zero_grad()
         # run backward pass

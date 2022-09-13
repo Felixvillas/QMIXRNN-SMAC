@@ -2,21 +2,19 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import random
 from statistics import mean
 from tqdm import *
-from torch.distributions import Categorical
 import torch
 import datetime
 
 from tensorboardX import SummaryWriter
 
 def init_episode_temp(ep_limits, state_shape, num_agents, obs_dim, action_dim):
-    episode_obs = np.zeros((ep_limits, num_agents, obs_dim), dtype=np.float32)
-    episode_state = np.zeros((ep_limits, state_shape), dtype=np.float32)
-    episode_action = np.zeros((ep_limits, num_agents), dtype=np.int64)
-    episode_reward = np.zeros((ep_limits), dtype=np.float32)
-    episode_avail_action = np.zeros((ep_limits, num_agents, action_dim), dtype=np.float32)
+    episode_obs = np.zeros((ep_limits+1, num_agents, obs_dim), dtype=np.float32)
+    episode_state = np.zeros((ep_limits+1, state_shape), dtype=np.float32)
+    episode_action = np.zeros((ep_limits+1, num_agents), dtype=np.int64)
+    episode_reward = np.zeros((ep_limits+1), dtype=np.float32)
+    episode_avail_action = np.zeros((ep_limits+1, num_agents, action_dim), dtype=np.float32)
     return episode_obs, episode_state, episode_action, episode_reward, episode_avail_action
 
 def store_hyper_para(args, store_path):
@@ -43,7 +41,6 @@ def qmix_learning(
     last_test_t, num_test = -args.test_freq - 1, 0
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    random.seed(args.seed)
     # Initialize Env
     env = env_class(map_name=args.map_name, seed=args.seed)
     env_info = env.get_env_info()
@@ -101,20 +98,19 @@ def qmix_learning(
     steps_queue = []
     win_queue = []
 
+    # refer pymarl: in every episode, t in exploration.value(t) is consistent
+    t_exploration = 0
+
     for t in tqdm(range(args.training_steps)):
 
         # get avail action for every agent
         avail_actions = env.get_avail_actions()
 
-        # Choose random action if not yet start learning else eps-greedily select actions
-        if t >= args.learning_starts:
-            random_selection = np.random.random(num_agents) < exploration.value(t-args.learning_starts)
-            # last_obs is a list of array that shape is (obs_shape,) --> numpy.array:(num_agents, obs_shape)
-            recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in last_obs], axis=0)
-            action = QMIX_agent.select_actions(recent_observations, avail_actions, random_selection)
-        else:
-            action = Categorical(torch.tensor(avail_actions)).sample()
-            action = [action[i].item() for i in range(num_agents)]
+        # eps-greedily select actions
+        random_selection = np.random.random(num_agents) < exploration.value(t_exploration)
+        # last_obs is a list of array that shape is (obs_shape,) --> numpy.array:(num_agents, obs_shape)
+        recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in last_obs], axis=0)
+        action = QMIX_agent.select_actions(recent_observations, avail_actions, random_selection)
         
         # Advance one step
         reward, done, info = env.step(action)
@@ -132,6 +128,20 @@ def qmix_learning(
 
         # Resets the environment when reaching an episode boundary
         if done:
+            '''for last experience in every episode'''
+            # get avail action for every agent
+            avail_actions = env.get_avail_actions()
+            # eps-greedily select actions
+            random_selection = np.random.random(num_agents) < exploration.value(t_exploration)
+            # last_obs is a list of array that shape is (obs_shape,) --> numpy.array:(num_agents, obs_shape)
+            recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in obs], axis=0)
+            action = QMIX_agent.select_actions(recent_observations, avail_actions, random_selection)
+            episode_obs[episode_len+1] = np.concatenate([np.expand_dims(ob, axis=0) for ob in obs], axis=0)
+            episode_state[episode_len+1] = state
+            episode_action[episode_len+1] = np.array(action)
+            episode_reward[episode_len+1] = 0
+            episode_avail_action[episode_len+1] = np.array(avail_actions)
+
             # store one episode experience into buffer
             episode_dict = {
                 'obs': episode_obs, 
@@ -168,6 +178,8 @@ def qmix_learning(
             # init para for new episide
             episode_obs, episode_state, episode_action, episode_reward, episode_avail_action = \
                 init_episode_temp(episode_limit, state_size, num_agents, obs_size, num_actions)
+            # update t_exploration
+            t_exploration = t
         else:
             episode_len += 1
 
@@ -179,7 +191,7 @@ def qmix_learning(
             QMIX_agent.increase_bate(t, args.training_steps)
 
         # train and evaluate
-        if (t >= args.learning_starts and done and QMIX_agent.can_sample()):
+        if (done and QMIX_agent.can_sample()):
             # gradient descent: train
             loss = QMIX_agent.update()
             num_param_update += 1
