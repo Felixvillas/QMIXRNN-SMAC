@@ -241,3 +241,6 @@ def qmix_learning(
 
     writer.close()
     env.close()
+
+    # last model save
+    QMIX_agent.save(checkpoint_path=os.path.join(log_dir, 'agent.pth'))

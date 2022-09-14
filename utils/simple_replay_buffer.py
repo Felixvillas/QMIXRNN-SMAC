@@ -94,15 +94,10 @@ class ReplayBuffer:
         idxes = np.random.choice(range(self.num_in_buffer), self.batch_size, replace=False).tolist()
         total_obs_batch, total_rew_batch, total_done_batch, max_ep_len = self.total_buffer.sample(idxes)
         obs_batchs, act_batchs, avail_act_batchs = self.buffers.sample(idxes, max_ep_len)
-        next_obs_batchs = obs_batchs[:, 1:]
-        next_avail_act_batchs = avail_act_batchs[:, 1:]
-        next_total_obs_batch = total_obs_batch[:, 1:]
-        # obs_batchs = obs_batchs[:, :-1]
         act_batchs = act_batchs[:, :-1]
-        avail_act_batchs = avail_act_batchs[:, :-1]
-        total_obs_batch = total_obs_batch[:, :-1]
+        avail_act_batchs = avail_act_batchs
+        total_obs_batch = total_obs_batch
         total_rew_batch = total_rew_batch[:, :-1]
         total_done_batch = total_done_batch[:, :-1]
         return obs_batchs, act_batchs, avail_act_batchs, \
-                    total_obs_batch, total_rew_batch, total_done_batch, \
-                        next_obs_batchs, next_avail_act_batchs, next_total_obs_batch
+                    total_obs_batch, total_rew_batch, total_done_batch
