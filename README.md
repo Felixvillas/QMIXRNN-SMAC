@@ -5,30 +5,10 @@ This clear implementation can help you figure out how does QMIX work
 ## Run
 **StarCraft2 version: SC2.4.6.2.69232 (harder than SC2.4.10)**
 
-Note: --optimizer=0/1(N) means that optimizer both `0: Adam` and `1: RMSprop` are good on this scenario, while number N in brackets means which optimizer is more suitable. Please just select one from 0/1 when running.
 ```shell
-python main.py --map-name=3s5z --optimizer=0/1(1)
-```
-```shell
-python main.py --map-name=1c3s5z --optimizer=0/1(0)
-```
-```shell
-python main.py --map-name=2s3z --optimizer=0/1(1)
-```
-```shell
-python main.py --map-name=8m --optimizer=0/1(0)
-```
-```shell
-python main.py --map-name=2s_vs_1sc --optimizer=0
-```
-```shell
-python main.py --map-name=3m --optimizer=0
-```
-```shell
-python main.py --map-name=10m_vs_11m --optimizer=0
+CUDA_VISIBLE_DEVICES=0 python main.py --map-name=3s5z --seed=0
 ```
 
-And I find that in most scenarios, `0: Adam` converge faster than `1: RMSprop`.
 ## TODO
 Now this code can do very good on part of easy scenarios like 1c3s5z, 2s3z, 3s5z, 8m, 2s_vs_1sc and 3m; 
 and relative good on easy scenarios 10m_vs_11m; but not good on hard and superhard scenarios.
