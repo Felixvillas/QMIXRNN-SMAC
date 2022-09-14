@@ -30,9 +30,8 @@ python main.py --map-name=10m_vs_11m --optimizer=0
 
 And I find that in most scenarios, `0: Adam` converge faster than `1: RMSprop`.
 ## TODO
-Now this code can do very good on part of easy scenarios like 1c3s5z, 2s3z, 3s5z and 8m, 
-and relative good on easy scenarios like 2s_vs_1sc, 3m and 10m_vs_11m
-but not good on hard and superhard scenarios.
+Now this code can do very good on part of easy scenarios like 1c3s5z, 2s3z, 3s5z, 8m, 2s_vs_1sc and 3m; 
+and relative good on easy scenarios 10m_vs_11m; but not good on hard and superhard scenarios.
 
 I'm trying to approach the result of pymarl. At the same time, I'm also trying to achieve some tricks on this code like multi step TD target and so on. 
 
