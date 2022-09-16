@@ -1,5 +1,4 @@
 import argparse
-import torch.optim as optim
 from smac.env import StarCraft2Env
 
 from model import QMIX_agent

@@ -204,7 +204,10 @@ def qmix_learning(
                 QMIX_agent.update_targets()
             # evaluate the Q-net in greedy mode
             if (t - last_test_t) / args.test_freq >= 1.0:
-                eval_data = QMIX_agent.evaluate(env, args.evaluate_num)                               
+                eval_data = QMIX_agent.evaluate(env, args.evaluate_num)
+                # env reset after evaluate 
+                env.reset()
+                QMIX_agent.Q.init_eval_rnn_hidden()                 
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/reward', scalar_value=eval_data[0], global_step=num_test * args.test_freq)
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/length', scalar_value=eval_data[1], global_step=num_test * args.test_freq)
                 writer.add_scalar(tag=f'starcraft{env_name}_eval/wintag', scalar_value=eval_data[2], global_step=num_test * args.test_freq)
