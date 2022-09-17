@@ -10,8 +10,8 @@ CUDA_VISIBLE_DEVICES=0 python main.py --map-name=3s5z --seed=0
 ```
 
 ## TODO
-Now this code can do very good on part of easy scenarios like 1c3s5z, 2s3z, 3s5z, 8m, 2s_vs_1sc and 3m; 
-and relative good on easy scenarios 10m_vs_11m; but not good on hard and superhard scenarios.
+Now this code can do very good on part of easy scenarios like 1c3s5z, 2s3z, 3s5z, 8m, 2s_vs_1sc, 3m and 10m_vs_11m; 
+but not good on hard and superhard scenarios, which is similar with the experiment results in [The StarCraft Multi-Agent Challenge](https://arxiv.org/pdf/1902.04043.pdf)
 
 I'm trying to approach the result of pymarl. At the same time, I'm also trying to achieve some tricks on this code like multi step TD target and so on. 
 
