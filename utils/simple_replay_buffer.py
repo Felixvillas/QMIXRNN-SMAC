@@ -42,12 +42,14 @@ class TotalEpReplayBuffer(EpReplayBuffers):
         self.reward = np.zeros((self.ep_size, self.ep_limits), dtype=np.float32)
         self.done = np.zeros((self.ep_size, self.ep_limits), dtype=np.float32)
         self.ep_length = np.zeros((self.ep_size,), dtype=np.int64)
+        self.mask = np.ones((self.ep_size, self.ep_limits), dtype=np.float32)
     
     def store(self, ep_dict, ep_len, idx):
         # store 1 episode experience of smac into buffer
         self.obs[idx] = ep_dict['obs']
         self.reward[idx] = ep_dict['reward']
-        self.done[idx][ep_len:] = 1.
+        self.done[idx][ep_len] = 1.
+        self.mask[idx][ep_len+1:] = 0.
         self.ep_length[idx] = ep_len + 1
 
     def sample(self, idxes):
@@ -57,8 +59,9 @@ class TotalEpReplayBuffer(EpReplayBuffers):
         obs_batch = self.obs[idxes][:, :max_ep_len]
         rew_batch = self.reward[idxes][:, :max_ep_len]
         done_batch = self.done[idxes][:, :max_ep_len]
+        mask_batch = self.mask[idxes][:, :max_ep_len]
 
-        return obs_batch, rew_batch, done_batch, max_ep_len
+        return obs_batch, rew_batch, done_batch, mask_batch, max_ep_len
 
 class ReplayBuffer:
     '''
@@ -92,10 +95,11 @@ class ReplayBuffer:
 
     def sample(self):
         idxes = np.random.choice(range(self.num_in_buffer), self.batch_size, replace=False).tolist()
-        total_obs_batch, total_rew_batch, total_done_batch, max_ep_len = self.total_buffer.sample(idxes)
+        total_obs_batch, total_rew_batch, total_done_batch, total_mask_batch, max_ep_len = self.total_buffer.sample(idxes)
         obs_batchs, act_batchs, avail_act_batchs = self.buffers.sample(idxes, max_ep_len)
         act_batchs = act_batchs[:, :-1]
         total_rew_batch = total_rew_batch[:, :-1]
         total_done_batch = total_done_batch[:, :-1]
+        total_mask_batch = total_mask_batch[:, :-1]
         return obs_batchs, act_batchs, avail_act_batchs, \
-                    total_obs_batch, total_rew_batch, total_done_batch
+                    total_obs_batch, total_rew_batch, total_done_batch, total_mask_batch

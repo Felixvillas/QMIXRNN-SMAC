@@ -210,7 +210,7 @@ class QMIX_agent(nn.Module):
     def update(self):
         '''update Q: 1 step of gradient descent'''
         obs_batchs, act_batchs, avail_act_batchs, \
-                    total_obs_batch, total_rew_batch, total_done_batch, = self.replay_buffer.sample()
+                    total_obs_batch, total_rew_batch, total_done_batch, total_mask_batch = self.replay_buffer.sample()
         
         # Convert numpy nd_array to torch tensor for calculation
         # every agent's experience
@@ -220,6 +220,7 @@ class QMIX_agent(nn.Module):
         total_obs_batch = torch.as_tensor(total_obs_batch, dtype=torch.float32, device=device)
         total_rew_batch = torch.as_tensor(total_rew_batch, dtype=torch.float32, device=device)
         not_done_total = torch.as_tensor(1 - total_done_batch, dtype=torch.float32, device=device)
+        mask = torch.as_tensor(total_mask_batch, dtype=torch.float32, device=device)
 
         # We choose Q based on action taken.
         all_current_Q_values = self.Q.get_batch_value(obs_batchs)
@@ -244,11 +245,6 @@ class QMIX_agent(nn.Module):
         total_target_Q_values = total_rew_batch + self.gamma * not_done_total * total_target_Q_values
         
         # take gradient step
-        # mask valueless current Q values: In every episode, the first step is always have value
-        mask = torch.cat(
-            (torch.ones(size=(total_done_batch.shape[0], 1), dtype=torch.float32, device=device), not_done_total[:, :-1]),
-            dim=1
-        )
         # compute loss: Detach variable from the current graph since we don't want gradients for next Q to propagated
         mask_td_error = (total_current_Q_values - total_target_Q_values.detach()) * mask
         loss = (mask_td_error ** 2).sum() / mask.sum()
