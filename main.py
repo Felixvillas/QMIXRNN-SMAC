@@ -1,10 +1,5 @@
 import argparse
-from smac.env import StarCraft2Env
-
-from model import QMIX_agent
 from learn import qmix_learning
-from utils.schedule import LinearSchedule
-from utils.sc_wrapper import single_net_sc2env
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -46,17 +41,7 @@ def get_args():
 
 def main(args=get_args()):
 
-    exploration_schedule = LinearSchedule(args.anneal_steps, args.anneal_end, args.anneal_start)
-
-    if args.share_para:
-        env_class = single_net_sc2env
-    else:
-        env_class = StarCraft2Env
-
     qmix_learning(
-        env_class=env_class,
-        q_func=QMIX_agent,
-        exploration=exploration_schedule,
         args=args
     )
 

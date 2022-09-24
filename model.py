@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 import numpy as np
 from utils.simple_replay_buffer import ReplayBuffer
+from utils.tools import init_episode_temp
 
 ################################## set device ##################################
 print("============================================================================================")
@@ -304,3 +305,55 @@ class QMIX_agent(nn.Module):
                     )
 
         return np.mean(eval_data, axis=0)
+
+    def run_episode(self, env, epsilon):
+        env.reset()
+        self.Q.init_eval_rnn_hidden()
+        episode_len = 0
+        done = False
+        action = None
+        episode_obs, episode_state, episode_action, episode_reward, episode_avail_action = \
+            init_episode_temp(self.episode_limits, self.state_size, self.num_agents, self.obs_size, self.num_actions)
+        reward_list = []
+        while not done:
+            obs = env.get_obs(action)
+            state = env.get_state()
+            avail_actions = env.get_avail_actions()
+            random_selection = np.random.random(self.num_agents) < epsilon
+            recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in obs], axis=0)
+            action = self.select_actions(recent_observations.copy(), avail_actions, random_selection)
+            reward, done, info = env.step(action)
+            # experience
+            episode_obs[episode_len] = recent_observations
+            episode_state[episode_len] = state
+            episode_action[episode_len] = np.array(action)
+            episode_reward[episode_len] = reward
+            episode_avail_action[episode_len] = np.array(avail_actions)
+            reward_list.append(reward)
+            episode_len += 1
+
+        '''done: for last experience in every episode'''
+        obs = env.get_obs(action)
+        state = env.get_state()
+        avail_actions = env.get_avail_actions()
+        random_selection = np.random.random(self.num_agents) < epsilon
+        recent_observations = np.concatenate([np.expand_dims(ob, axis=0) for ob in obs], axis=0)
+        action = self.select_actions(recent_observations.copy(), avail_actions, random_selection)
+        episode_obs[episode_len] = recent_observations
+        episode_state[episode_len] = state
+        episode_action[episode_len] = np.array(action)
+        episode_reward[episode_len] = 0
+        episode_avail_action[episode_len] = np.array(avail_actions)
+        episode_dict = {
+            'obs': episode_obs, 
+            'action': episode_action, 
+            'avail_action': episode_avail_action
+        }
+        total_episode_dict = {
+            'obs': episode_state, 
+            'reward': episode_reward, 
+        }
+
+        self.replay_buffer.store(episode_dict, total_episode_dict, episode_len-1)
+        win_flag = 1. if 'battle_won' in info and info['battle_won'] else 0.
+        return reward_list, win_flag, episode_len
