@@ -83,7 +83,7 @@ class QMIX(nn.Module):
 
         q_value = []
         rnn_value = torch.zeros((batch_size*num_agents, self.net_embed_dim), dtype=torch.float32, device=device)
-        obs = obs.clone().transpose(1, 2).reshape(batch_size*num_agents, timesteps, obs_dim)
+        obs = obs.transpose(1, 2).reshape(batch_size*num_agents, timesteps, obs_dim)
         for t in range(timesteps):
             '''
               note: (batch_size, num_agents, dim) --> (batch_size*num_agents, dim) [###By tensor.reshape]
