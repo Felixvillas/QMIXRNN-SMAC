@@ -80,22 +80,22 @@ class QMIX(nn.Module):
         #         avail_actions:(batch_size, episode_limits, num_agents, num_actions)
         # output: q_value:      (batch_size, episode_limits, num_agents, num_actions)
         batch_size, timesteps, num_agents, obs_dim = obs.shape  # batch_size here is actually episode_number
-        self.init_train_rnn_hidden(episode_num=batch_size)
-        _, _, hidden_dim = self.train_rnn_hidden.shape
 
         q_value = []
+        rnn_value = torch.zeros((batch_size*num_agents, self.net_embed_dim), dtype=torch.float32, device=device)
+        obs = obs.clone().transpose(1, 2).reshape(batch_size*num_agents, timesteps, obs_dim)
         for t in range(timesteps):
             '''
               note: (batch_size, num_agents, dim) --> (batch_size*num_agents, dim) [###By tensor.reshape]
               As there is no temporal relationship among agents and nn.GRUCell can only accept 2-D data as inputs, 
               so we can concatenate batch_size experiences of different agents for faster cuda parallel computing
             '''
-            q_1 = F.relu(self.fc1(obs[:, t].reshape(-1, obs_dim)))
-            rnn_value = self.rnn(q_1, self.train_rnn_hidden.reshape(-1, hidden_dim))
+            q_1 = F.relu(self.fc1(obs[:, t]))
+            rnn_value = self.rnn(q_1, rnn_value)
             q_2 = self.fc2(rnn_value)
-            self.train_rnn_hidden = rnn_value.reshape(batch_size, num_agents, hidden_dim)
-            q_value.append(q_2.reshape(batch_size, num_agents, -1))
-        q_value = torch.stack(q_value, dim=1)
+            q_value.append(q_2)
+        q_value = torch.stack(q_value, dim=1) # (batch_size*num_agents, episode_limits, num_actions)
+        q_value = q_value.reshape(batch_size, num_agents, timesteps, -1).transpose(1, 2)
         return q_value
         
     def get_batch_total(self, max_q_value, state):
@@ -131,10 +131,6 @@ class QMIX(nn.Module):
         b2 = self.hyper_b2(state).unsqueeze(-1)
         return torch.abs(w1), b1, torch.abs(w2), b2
         # return F.softmax(w1, dim=-2), b1, F.softmax(w2, -2), b2
-
-    def init_train_rnn_hidden(self, episode_num):
-        # init a gru_hidden for every agent of every episode during training
-        self.train_rnn_hidden = torch.zeros((episode_num, self.num_agents, self.net_embed_dim), dtype=torch.float32, device=device)
 
     def init_eval_rnn_hidden(self):
         # init a gru_hidden for every agent of every episode during evaluating
