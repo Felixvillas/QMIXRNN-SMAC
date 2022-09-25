@@ -10,6 +10,7 @@ from utils.schedule import LinearSchedule
 from utils.sc_wrapper import single_net_sc2env
 from smac.env import StarCraft2Env
 from model import QMIX_agent
+import time, datetime
 
 def qmix_learning(
     args=None
@@ -19,6 +20,9 @@ def qmix_learning(
     '''
     assert args.save_model_freq % args.target_update_freq == 0
     last_test_t, num_test = -args.test_freq - 1, 0
+    if args.seed == None:
+        time.sleep(3)
+        args.seed = int(''.join(reversed(datetime.datetime.now().strftime("%m%d%H%M%S"))))
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     # Initialize Env

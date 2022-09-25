@@ -17,7 +17,7 @@ def get_args():
     parser.add_argument('--learning-rate', type=float, default=5e-4)
     parser.add_argument('--grad-norm-clip', type=float, default=10)
     # seed
-    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--seed', type=int, default=None)
     # ddqn
     parser.add_argument('--is-ddqn', type=int, default=True)
     # per
